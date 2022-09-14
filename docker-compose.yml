@@ -1,0 +1,11 @@
+version: "3.9"
+
+services:
+    volgar_pollution_telegram:
+        container_name: volgar_pollution_telegram
+        build: .
+        environment:
+            - URL_PATH_GRAFANA=http://80.78.240.164/?orgId=1&from=now-2h&to=now&kiosk
+            - URL_ADDRESS_PROMETHEUS=80.78.240.164:9090
+        volumes: 
+            - ./pollutions_names.json:/app/pollutions_names.json
