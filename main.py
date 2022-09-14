@@ -24,7 +24,7 @@ logger.setLevel(str(os.getenv('LOG_LEVEL', 'INFO')).upper())
 URL_PATH_GRAFANA = str(os.getenv('URL_PATH_GRAFANA'))
 URL_ADDRESS_PROMETHEUS = str(os.getenv('URL_ADDRESS_PROMETHEUS'))
 CRON_MINUTE = str(os.getenv('CRON_MINUTE', '*/3'))
-VERSION = '1.0.0'
+VERSION = '1.0.1'
 
 
 def get_current_screenshot(height: int = 950, width: int = 450):
@@ -209,6 +209,8 @@ class MainHandler:
 
     async def send_polluted_message(self, p_list: list[Pollution]) -> None:
         logger.info(f'Sending polluted message for pollutions: {" ".join([p.name for p in p_list])} ...')
+        for p in p_list:
+            p.last_reported_pollution_pdk_percents = p.pollution_pdk_percents
         main_msg = 'Превышение предельной допустимой концентрации по следующим веществам:\n'
         pdk_msg_l = [f'**- {p.name}**: {p.pollution_pdk_percents} %ПДК\n' for p in p_list] 
         end_msg = 'Рекомендуется закрыть окна.'
