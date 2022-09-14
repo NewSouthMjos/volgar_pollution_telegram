@@ -24,7 +24,9 @@ logger.setLevel(str(os.getenv('LOG_LEVEL', 'INFO')).upper())
 URL_PATH_GRAFANA = str(os.getenv('URL_PATH_GRAFANA'))
 URL_ADDRESS_PROMETHEUS = str(os.getenv('URL_ADDRESS_PROMETHEUS'))
 CRON_MINUTE = str(os.getenv('CRON_MINUTE', '*/3'))
-VERSION = '1.0.2'
+INFORM_CHAT_ID = os.getenv('INFORM_CHAT_ID')
+BOT_TOKEN = str(os.getenv('BOT_TOKEN'))
+VERSION = '1.0.3'
 
 
 def get_current_screenshot(height: int = 950, width: int = 500):
@@ -126,7 +128,7 @@ class PollutionsHandler:
 class TelegramHandler:
     def __init__(self) -> None:
         # TODO: доставать токен из .env
-        self.bot = telegram.Bot(os.getenv('BOT_TOKEN'))
+        self.bot = telegram.Bot(BOT_TOKEN)
         self.chat_id = os.getenv("TARGET_CHAT_NAME")
 
     async def log_bot_info(self) -> None:
@@ -143,7 +145,7 @@ class TelegramHandler:
         if chat_id is None:
             chat_id = self.chat_id
         async with self.bot:
-            await self.bot.send_photo(chat_id, photo, caption=msg, parse_mode='MarkdownV2')
+            await self.bot.send_photo(chat_id, photo, caption=msg, parse_mode='HTML')
 
 
 class MainHandler:
@@ -211,9 +213,9 @@ class MainHandler:
         logger.info(f'Sending polluted message for pollutions: {" ".join([p.name for p in p_list])} ...')
         for p in p_list:
             p.last_reported_pollution_pdk_percents = p.pollution_pdk_percents
-        main_msg = 'Превышение предельной допустимой концентрации по следующим веществам:\n'
-        pdk_msg_l = [f'**\- {p.name}: {p.pollution_pdk_percents} %ПДК**\n' for p in p_list] 
-        end_msg = 'Рекомендуется закрыть окна.'
+        main_msg = 'Превышение предельной допустимой концентрации по следующим веществам:\n\n'
+        pdk_msg_l = [f'<b>• {p.name}: {p.pollution_pdk_percents} %ПДК</b>\n' for p in p_list] 
+        end_msg = '\nРекомендуется закрыть окна'
         full_msg = f'{main_msg}{"".join(pdk_msg_l)}{end_msg}'
         await self.tg_handler.send_photo(
             get_current_screenshot(),
@@ -282,10 +284,24 @@ def main():
     scheduler.start()
     logger.info('Started successfully')
     try:
+        requests.post(
+            f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage',
+            json={
+                    "text": f"Started volgar_pollution_telegram version: {VERSION}",
+                    "chat_id": INFORM_CHAT_ID
+                }
+        )
         asyncio.get_event_loop().run_forever()
     except (KeyboardInterrupt, SystemExit):
         logging.warning('Interrupted')
     finally:
+        requests.post(
+            f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage',
+            json={
+                    "text": f"Exited volgar_pollution_telegram version: {VERSION}",
+                    "chat_id": INFORM_CHAT_ID
+                }
+        )
         sys.exit(0)
 
 
