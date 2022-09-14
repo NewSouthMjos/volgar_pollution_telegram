@@ -27,7 +27,7 @@ CRON_MINUTE = str(os.getenv('CRON_MINUTE', '*/3'))
 VERSION = '1.0.1'
 
 
-def get_current_screenshot(height: int = 950, width: int = 450):
+def get_current_screenshot(height: int = 950, width: int = 500):
     chrome_options = webdriver.ChromeOptions()
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--headless')
@@ -143,7 +143,7 @@ class TelegramHandler:
         if chat_id is None:
             chat_id = self.chat_id
         async with self.bot:
-            await self.bot.send_photo(chat_id, photo, caption=msg)
+            await self.bot.send_photo(chat_id, photo, caption=msg, parse_mode='MarkdownV2')
 
 
 class MainHandler:
@@ -212,7 +212,7 @@ class MainHandler:
         for p in p_list:
             p.last_reported_pollution_pdk_percents = p.pollution_pdk_percents
         main_msg = 'Превышение предельной допустимой концентрации по следующим веществам:\n'
-        pdk_msg_l = [f'**- {p.name}**: {p.pollution_pdk_percents} %ПДК\n' for p in p_list] 
+        pdk_msg_l = [f'**- {p.name}: {p.pollution_pdk_percents} %ПДК**\n' for p in p_list] 
         end_msg = 'Рекомендуется закрыть окна.'
         full_msg = f'{main_msg}{"".join(pdk_msg_l)}{end_msg}'
         await self.tg_handler.send_photo(
@@ -291,3 +291,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # scr = get_current_screenshot(950, 500)
+    # write_picture_to_disk(scr)
