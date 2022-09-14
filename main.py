@@ -24,7 +24,7 @@ logger.setLevel(str(os.getenv('LOG_LEVEL', 'INFO')).upper())
 URL_PATH_GRAFANA = str(os.getenv('URL_PATH_GRAFANA'))
 URL_ADDRESS_PROMETHEUS = str(os.getenv('URL_ADDRESS_PROMETHEUS'))
 CRON_MINUTE = str(os.getenv('CRON_MINUTE', '*/3'))
-VERSION = '1.0.1'
+VERSION = '1.0.2'
 
 
 def get_current_screenshot(height: int = 950, width: int = 500):
