@@ -7,6 +7,7 @@ import sys
 import time
 import traceback
 from collections import deque
+from enum import IntEnum
 
 import requests
 import telegram
@@ -26,7 +27,7 @@ URL_ADDRESS_PROMETHEUS = str(os.getenv('URL_ADDRESS_PROMETHEUS'))
 CRON_MINUTE = str(os.getenv('CRON_MINUTE', '*/3'))
 INFORM_CHAT_ID = os.getenv('INFORM_CHAT_ID')
 BOT_TOKEN = str(os.getenv('BOT_TOKEN'))
-VERSION = '1.0.3'
+VERSION = '1.0.4'
 
 
 def get_current_screenshot(height: int = 950, width: int = 500):
@@ -148,6 +149,12 @@ class TelegramHandler:
             await self.bot.send_photo(chat_id, photo, caption=msg, parse_mode='HTML')
 
 
+class MessageType(IntEnum):
+    NONE = 0
+    UNPOLLUTED = 1
+    POLLUTED = 2
+
+
 class MainHandler:
     def __init__(
             self,
@@ -189,17 +196,21 @@ class MainHandler:
                     p_result.append(p)
         return p_result
 
-    def is_new_message_necessary(self) -> bool:
+    def get_type_message_to_send(self) -> MessageType:
         if len(self.is_anything_polluted_deque) == 1:
             if len(self.get_important_pollution_changes()) > 0:
-                return True
+                return MessageType.POLLUTED
             else:
-                return False
-        if self.is_anything_polluted_deque[-2] != self.is_anything_polluted_deque[-1]:
-            return True
+                return MessageType.NONE
+        if self.is_anything_polluted_deque[-1] == False \
+                and self.is_anything_polluted_deque[-2] == True:
+            return MessageType.UNPOLLUTED
+        elif self.is_anything_polluted_deque[-1] == True \
+                and self.is_anything_polluted_deque[-2] == False:
+            return MessageType.POLLUTED
         if len(self.get_important_pollution_changes()) > 0:
-            return True
-        return False
+            return MessageType.POLLUTED
+        return MessageType.NONE
 
     async def send_unpolluted_message(self) -> None:
         logger.info('Sending unpolluted message...')
@@ -227,14 +238,15 @@ class MainHandler:
         logger.info('Updating pollutions...')
         self.update_pollutions()
         logger.info('Updating done')
-        if not(self.is_new_message_necessary()):
+        msg_t = self.get_type_message_to_send()
+        if msg_t == MessageType.NONE:
             logger.info('No new message is necessary')
             return
-        p_to_report = self.get_important_pollution_changes()
-        if len(p_to_report) == 0:
-            await self.send_unpolluted_message()
-        else:
+        elif msg_t == MessageType.POLLUTED:
+            p_to_report = self.get_important_pollution_changes()
             await self.send_polluted_message(p_to_report)
+        elif msg_t == MessageType.UNPOLLUTED:
+            await self.send_unpolluted_message()
 
     async def main_job_wrapper(self) -> None:
 
@@ -242,10 +254,6 @@ class MainHandler:
         if len(self.p_handler.pollutions) == 0:
             await self.tg_handler.log_bot_info()
             self.post_init()
-            await self.tg_handler.send_text_message(
-                f'Started volgar_pollution_telegram version: {VERSION}',
-                chat_id=os.getenv('INFORM_CHAT_ID')
-                )
 
         try:
             await self.send_message_if_necessary()
