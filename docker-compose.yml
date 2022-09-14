@@ -7,5 +7,10 @@ services:
         environment:
             - URL_PATH_GRAFANA=http://80.78.240.164/?orgId=1&from=now-2h&to=now&kiosk
             - URL_ADDRESS_PROMETHEUS=80.78.240.164:9090
+            - BOT_TOKEN=${BOT_TOKEN}
+            - TARGET_CHAT_NAME=@volgar_test_channel
+            - LOG_LEVEL=INFO
+            - INFORM_CHAT_ID=410313238
+            - CRON_MINUTE=*/1
         volumes: 
             - ./pollutions_names.json:/app/pollutions_names.json

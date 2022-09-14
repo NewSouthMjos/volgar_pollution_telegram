@@ -5,6 +5,6 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-COPY test23.py .
+COPY main.py .
 COPY pollutions_names.json .
-ENTRYPOINT ["python3", "test23.py"]
+ENTRYPOINT ["python3", "main.py"]
