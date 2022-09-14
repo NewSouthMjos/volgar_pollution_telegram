@@ -212,7 +212,7 @@ class MainHandler:
         for p in p_list:
             p.last_reported_pollution_pdk_percents = p.pollution_pdk_percents
         main_msg = 'Превышение предельной допустимой концентрации по следующим веществам:\n'
-        pdk_msg_l = [f'**- {p.name}: {p.pollution_pdk_percents} %ПДК**\n' for p in p_list] 
+        pdk_msg_l = [f'**\- {p.name}: {p.pollution_pdk_percents} %ПДК**\n' for p in p_list] 
         end_msg = 'Рекомендуется закрыть окна.'
         full_msg = f'{main_msg}{"".join(pdk_msg_l)}{end_msg}'
         await self.tg_handler.send_photo(
