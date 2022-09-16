@@ -123,7 +123,7 @@ class PollutionsHandler:
             logger.warning('No data from prometheus!')
             raise PrometheusScrappingException
         logger.debug(f'{id}:{value}')
-        return int(value)
+        return round(value)
 
 
 class TelegramHandler:
