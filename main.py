@@ -27,7 +27,7 @@ URL_ADDRESS_PROMETHEUS = str(os.getenv('URL_ADDRESS_PROMETHEUS'))
 CRON_MINUTE = str(os.getenv('CRON_MINUTE', '*/3'))
 INFORM_CHAT_ID = os.getenv('INFORM_CHAT_ID')
 BOT_TOKEN = str(os.getenv('BOT_TOKEN'))
-VERSION = '1.1.2'
+VERSION = '1.1.3'
 
 
 def get_current_screenshot(height: int = 950, width: int = 500):
@@ -358,6 +358,6 @@ def main():
 
 
 if __name__ == "__main__":
-    # main()
-    scr = get_current_screenshot(950, 400)
-    write_picture_to_disk(scr)
+    main()
+    # scr = get_current_screenshot(950, 400)
+    # write_picture_to_disk(scr)
