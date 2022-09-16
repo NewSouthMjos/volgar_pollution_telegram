@@ -27,7 +27,7 @@ URL_ADDRESS_PROMETHEUS = str(os.getenv('URL_ADDRESS_PROMETHEUS'))
 CRON_MINUTE = str(os.getenv('CRON_MINUTE', '*/3'))
 INFORM_CHAT_ID = os.getenv('INFORM_CHAT_ID')
 BOT_TOKEN = str(os.getenv('BOT_TOKEN'))
-VERSION = '1.0.5'
+VERSION = '1.1.0'
 
 
 def get_current_screenshot(height: int = 950, width: int = 500):
@@ -76,7 +76,7 @@ class Pollution:
         self.name = name
         self.pollution_pdk_percents = 0
         self.is_polluted = False
-        self.last_reported_pollution_pdk_percents = None
+        self.last_reported_pollution_pdk_percents = 0
 
     def __str__(self) -> str:
         return f'<{self.__class__} at {hex(id(self))}: {self.id}: {self.name}' \
@@ -110,7 +110,7 @@ class PollutionsHandler:
                 pollution.is_polluted = False
 
     @staticmethod
-    def _get_pollution_value_by_id(id: int) -> float:
+    def _get_pollution_value_by_id(id: int) -> int:
         response = requests.get(f'http://{URL_ADDRESS_PROMETHEUS}/api/v1/query?'
                                 'query=pollutions{id="%d", data_source="pogoda_sv_rounded"}' % id)
         logger.debug(response.text)
@@ -151,8 +151,13 @@ class TelegramHandler:
 
 class MessageType(IntEnum):
     NONE = 0
-    UNPOLLUTED = 1
-    POLLUTED = 2
+    # UNPOLLUTED = 1
+    # POLLUTED = 2
+    ALL_CLEAR_NOW = 3
+    POLLUTION_APPEAR = 4
+    POLLUTION_CONTINUES = 5
+
+
 
 
 class MainHandler:
@@ -163,8 +168,8 @@ class MainHandler:
     ) -> None:
         self.p_handler = p_handler
         self.tg_handler = tg_handler
-        self.is_anything_polluted_deque = deque(maxlen=2)
         self.exceptions_counter = 0
+        self.last_reported_msg_type = MessageType.NONE
 
     def post_init(self):
         self.p_handler.read_pollutions_names_from_file('pollutions_names.json')
@@ -174,9 +179,6 @@ class MainHandler:
 
     def update_pollutions(self) -> None:
         self.p_handler.update_pollutions_values()
-        self.is_anything_polluted_deque.append(
-            self.is_anything_polluted()
-        )
 
     def get_important_pollution_changes(self) -> list[Pollution]:
         """
@@ -187,66 +189,106 @@ class MainHandler:
         """
         p_result = []
         for p in self.p_handler.pollutions:
-            if p.last_reported_pollution_pdk_percents is not None:
-                if p.pollution_pdk_percents >= 100 \
-                        and abs(p.pollution_pdk_percents - p.last_reported_pollution_pdk_percents) > 100:
-                    p_result.append(p)
-            else:
-                if p.pollution_pdk_percents >= 100:
-                    p_result.append(p)
+            if p.pollution_pdk_percents >= 100 \
+                    and abs(p.pollution_pdk_percents\
+                            - p.last_reported_pollution_pdk_percents
+                            ) > 100:
+                p_result.append(p)
         return p_result
 
-    def get_type_message_to_send(self) -> MessageType:
-        if len(self.is_anything_polluted_deque) == 1:
-            if len(self.get_important_pollution_changes()) > 0:
-                return MessageType.POLLUTED
-            else:
-                return MessageType.NONE
-        if self.is_anything_polluted_deque[-1] == False \
-                and self.is_anything_polluted_deque[-2] == True:
-            return MessageType.UNPOLLUTED
-        elif self.is_anything_polluted_deque[-1] == True \
-                and self.is_anything_polluted_deque[-2] == False:
-            return MessageType.POLLUTED
-        if len(self.get_important_pollution_changes()) > 0:
-            return MessageType.POLLUTED
-        return MessageType.NONE
+    def get_all_pollution(self) -> list[Pollution]:
+        """
+        Возвращаются объекты Pollution,
+        превышения ПДК по которым > 100%
+        """
+        p_result = []
+        for p in self.p_handler.pollutions:
+            if p.pollution_pdk_percents >= 100:
+                p_result.append(p)
+        return p_result
 
-    async def send_unpolluted_message(self) -> None:
-        logger.info('Sending unpolluted message...')
+    def get_type_message_to_send(self) -> tuple[MessageType, list[Pollution]]:
+        if self.last_reported_msg_type in (
+                MessageType.ALL_CLEAR_NOW,
+                MessageType.NONE):
+            p = self.get_all_pollution()
+            if len(p) > 0:
+                return MessageType.POLLUTION_APPEAR, p
+            else:
+                return MessageType.NONE, []
+        elif self.last_reported_msg_type in (
+                MessageType.POLLUTION_APPEAR,
+                MessageType.POLLUTION_CONTINUES):
+            p = self.get_important_pollution_changes()
+            if len(p) > 0:
+                return MessageType.POLLUTION_CONTINUES, p
+            else:
+                return MessageType.NONE, []
+        
+        # Should not be executed if all works fine:
+        else:
+            return MessageType.NONE, [] 
+
+    def _construct_polluted_part_msg(self, p_list: list[Pollution]) -> str:
+        return "".join([
+            f'<b>• {p.name}: {p.pollution_pdk_percents} %ПДК</b>\n'
+            for p in p_list
+        ])
+
+    async def send_all_clear_now_message(self) -> None:
         await self.tg_handler.send_photo(
             get_current_screenshot(),
-            'Значения всех измеряемых веществ находятся в пределах ПДК'
+            'Значения всех измеряемых веществ вернулось в пределы ПДК'
         )
-        logger.info(f'Sending unpolluted message done')
 
-    async def send_polluted_message(self, p_list: list[Pollution]) -> None:
-        logger.info(f'Sending polluted message for pollutions: {" ".join([p.name for p in p_list])} ...')
+    async def send_pollution_appear_message(self, p_list: list[Pollution]) -> None:
         for p in p_list:
             p.last_reported_pollution_pdk_percents = p.pollution_pdk_percents
-        main_msg = 'Превышение предельной допустимой концентрации по следующим веществам:\n\n'
-        pdk_msg_l = [f'<b>• {p.name}: {p.pollution_pdk_percents} %ПДК</b>\n' for p in p_list] 
+        main_msg = 'Внимание! Зарегистрировано превышение предельной допустимой концентрации по следующим веществам:\n\n'
+        pdk_msg_l = self._construct_polluted_part_msg(p_list)
         end_msg = '\nРекомендуется закрыть окна'
-        full_msg = f'{main_msg}{"".join(pdk_msg_l)}{end_msg}'
+        full_msg = f'{main_msg}{pdk_msg_l}{end_msg}'
         await self.tg_handler.send_photo(
             get_current_screenshot(),
             full_msg
         )
-        logger.info(f'Sending polluted message done')
+
+    async def send_pollution_continues_message(self, p_list: list[Pollution]) -> None:
+        for p in p_list:
+            p.last_reported_pollution_pdk_percents = p.pollution_pdk_percents
+        main_msg = 'Продолжается превышение предельной допустимой концентрации по следующим веществам:\n\n'
+        pdk_msg_l = self._construct_polluted_part_msg(p_list)
+        full_msg = f'{main_msg}{pdk_msg_l}'
+        await self.tg_handler.send_photo(
+            get_current_screenshot(),
+            full_msg
+        )
 
     async def send_message_if_necessary(self) -> None:
         logger.info('Updating pollutions...')
         self.update_pollutions()
         logger.info('Updating done')
-        msg_t = self.get_type_message_to_send()
+        msg_t, p_l = self.get_type_message_to_send()
         if msg_t == MessageType.NONE:
             logger.info('No new message is necessary')
             return
-        elif msg_t == MessageType.POLLUTED:
-            p_to_report = self.get_important_pollution_changes()
-            await self.send_polluted_message(p_to_report)
-        elif msg_t == MessageType.UNPOLLUTED:
-            await self.send_unpolluted_message()
+        elif msg_t == MessageType.ALL_CLEAR_NOW:
+            logger.info('send_all_clear_now_message...')
+            await self.send_all_clear_now_message()
+            self.last_reported_msg_type = MessageType.ALL_CLEAR_NOW
+            logger.info(f'send_all_clear_now_message done')
+        elif msg_t == MessageType.POLLUTION_APPEAR:
+            logger.info(f'send_pollution_appear_message for pollutions: \
+                {" ".join([p.name for p in p_l])} ...')
+            await self.send_pollution_appear_message(p_l)
+            self.last_reported_msg_type = MessageType.POLLUTION_APPEAR
+            logger.info(f'send_pollution_appear_message done')
+        elif msg_t == MessageType.POLLUTION_CONTINUES:
+            logger.info(f'send_pollution_continues_message for pollutions: \
+                {" ".join([p.name for p in p_l])} ...')
+            await self.send_pollution_continues_message(p_l)
+            self.last_reported_msg_type = MessageType.POLLUTION_CONTINUES
+            logger.info(f'send_pollution_continues_message done')
 
     async def main_job_wrapper(self) -> None:
 
