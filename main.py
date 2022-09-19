@@ -26,7 +26,7 @@ URL_ADDRESS_PROMETHEUS = str(os.getenv('URL_ADDRESS_PROMETHEUS'))
 CRON_MINUTE = str(os.getenv('CRON_MINUTE', '*/3'))
 INFORM_CHAT_ID = os.getenv('INFORM_CHAT_ID')
 BOT_TOKEN = str(os.getenv('BOT_TOKEN'))
-VERSION = '1.2.0'
+VERSION = '1.2.1'
 
 
 def get_current_screenshot(height: int = 950, width: int = 500):
@@ -260,7 +260,8 @@ class MainHandler:
     async def send_all_clear_now_message(self) -> None:
         await self.tg_handler.send_photo(
             get_current_screenshot(),
-            ('Значения всех измеряемых веществ вернулось в пределы ПДК.\n'
+            ('#конец_периода_загрязнения\n'
+            'Значения всех измеряемых веществ вернулось в пределы ПДК.\n'
             'Максимальные значения в последний период загрязнения:\n\n'
             f'{self._construct_after_polluted_part_msg()}'
             )
@@ -269,10 +270,11 @@ class MainHandler:
     async def send_pollution_appear_message(self, p_list: list[Pollution]) -> None:
         for p in p_list:
             p.last_reported_pollution_pdk_percents = p.pollution_pdk_percents
+        top_hashtag = '#начало_периода_загрязнения\n'
         main_msg = 'Внимание! Зарегистрировано превышение предельной допустимой концентрации по следующим веществам:\n\n'
         pdk_msg_l = self._construct_polluted_part_msg(p_list)
         end_msg = '\nРекомендуется закрыть окна'
-        full_msg = f'{main_msg}{pdk_msg_l}{end_msg}'
+        full_msg = f'{top_hashtag}{main_msg}{pdk_msg_l}{end_msg}'
         await self.tg_handler.send_photo(
             get_current_screenshot(),
             full_msg
