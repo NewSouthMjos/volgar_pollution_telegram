@@ -27,7 +27,7 @@ URL_ADDRESS_PROMETHEUS = str(os.getenv('URL_ADDRESS_PROMETHEUS'))
 CRON_MINUTE = str(os.getenv('CRON_MINUTE', '*/3'))
 INFORM_CHAT_ID = os.getenv('INFORM_CHAT_ID')
 BOT_TOKEN = str(os.getenv('BOT_TOKEN'))
-VERSION = '1.1.3'
+VERSION = '1.1.4'
 
 
 def get_current_screenshot(height: int = 950, width: int = 500):
@@ -190,9 +190,12 @@ class MainHandler:
         p_result = []
         for p in self.p_handler.pollutions:
             if p.pollution_pdk_percents >= 100 \
-                    and abs(p.pollution_pdk_percents\
-                            - p.last_reported_pollution_pdk_percents
-                            ) > 100:
+                    and any((
+                        (p.pollution_pdk_percents\
+                            - p.last_reported_pollution_pdk_percents > 0),
+                        (p.pollution_pdk_percents\
+                            - p.last_reported_pollution_pdk_percents < -50)
+                        )):
                 p_result.append(p)
         return p_result
 
