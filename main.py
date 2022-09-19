@@ -6,7 +6,6 @@ import signal
 import sys
 import time
 import traceback
-from collections import deque
 from enum import IntEnum
 
 import requests
@@ -27,7 +26,7 @@ URL_ADDRESS_PROMETHEUS = str(os.getenv('URL_ADDRESS_PROMETHEUS'))
 CRON_MINUTE = str(os.getenv('CRON_MINUTE', '*/3'))
 INFORM_CHAT_ID = os.getenv('INFORM_CHAT_ID')
 BOT_TOKEN = str(os.getenv('BOT_TOKEN'))
-VERSION = '1.1.4'
+VERSION = '1.2.0'
 
 
 def get_current_screenshot(height: int = 950, width: int = 500):
@@ -77,6 +76,7 @@ class Pollution:
         self.pollution_pdk_percents = 0
         self.is_polluted = False
         self.last_reported_pollution_pdk_percents = 0
+        self.max_report_period_pdk_percents = 0
 
     def __str__(self) -> str:
         return f'<{self.__class__} at {hex(id(self))}: {self.id}: {self.name}' \
@@ -84,6 +84,13 @@ class Pollution:
 
     def __repr__(self) -> str:
         return self.__str__()
+
+    def update_max(self) -> None:
+        if self.max_report_period_pdk_percents < self.pollution_pdk_percents:
+            self.max_report_period_pdk_percents = self.pollution_pdk_percents
+
+    def reset_max(self) -> None:
+        self.max_report_period_pdk_percents = 0
 
 
 class PollutionsHandler:
@@ -108,6 +115,10 @@ class PollutionsHandler:
                 pollution.is_polluted = True
             else:
                 pollution.is_polluted = False
+
+    def reset_all_max(self) -> None:
+        for p in self.pollutions:
+            p.reset_max()
 
     @staticmethod
     def _get_pollution_value_by_id(id: int) -> int:
@@ -240,10 +251,19 @@ class MainHandler:
             for p in p_list
         ])
 
+    def _construct_after_polluted_part_msg(self) -> str:
+        return "".join([
+            f'<i>• {p.name}: {p.max_report_period_pdk_percents} %ПДК</i>\n'
+            for p in self.p_handler.pollutions if p.max_report_period_pdk_percents >= 100
+        ])
+
     async def send_all_clear_now_message(self) -> None:
         await self.tg_handler.send_photo(
             get_current_screenshot(),
-            'Значения всех измеряемых веществ вернулось в пределы ПДК'
+            ('Значения всех измеряемых веществ вернулось в пределы ПДК.\n'
+            'Максимальные значения в последний период загрязнения:\n\n'
+            f'{self._construct_after_polluted_part_msg()}'
+            )
         )
 
     async def send_pollution_appear_message(self, p_list: list[Pollution]) -> None:
@@ -282,18 +302,21 @@ class MainHandler:
             await self.send_all_clear_now_message()
             self.last_reported_msg_type = MessageType.ALL_CLEAR_NOW
             logger.info(f'send_all_clear_now_message done')
+            self.p_handler.reset_all_max()
         elif msg_t == MessageType.POLLUTION_APPEAR:
             logger.info(f'send_pollution_appear_message for pollutions: \
                 {" ".join([p.name for p in p_l])} ...')
             await self.send_pollution_appear_message(p_l)
             self.last_reported_msg_type = MessageType.POLLUTION_APPEAR
             logger.info(f'send_pollution_appear_message done')
+            [p.update_max() for p in p_l]
         elif msg_t == MessageType.POLLUTION_CONTINUES:
             logger.info(f'send_pollution_continues_message for pollutions: \
                 {" ".join([p.name for p in p_l])} ...')
             await self.send_pollution_continues_message(p_l)
             self.last_reported_msg_type = MessageType.POLLUTION_CONTINUES
             logger.info(f'send_pollution_continues_message done')
+            [p.update_max() for p in p_l]
 
     async def main_job_wrapper(self) -> None:
 
